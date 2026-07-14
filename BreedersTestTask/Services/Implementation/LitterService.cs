@@ -87,7 +87,7 @@ public class LitterService : ILitterService
             {
                 EntityId = litter.Id,
                 BreederId = breederId,
-                Action = "PublishAttemptFailed_LimitExceeded",
+                Action = "Publish attempt failed - limits exceeded",
                 CreatedAt = DateTime.UtcNow
             });
 
@@ -105,7 +105,7 @@ public class LitterService : ILitterService
             {
                 EntityId = litter.Id,
                 BreederId = breederId,
-                Action = "Published",
+                Action = "Published for free",
                 CreatedAt = DateTime.UtcNow
             });
 
