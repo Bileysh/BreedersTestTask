@@ -33,8 +33,18 @@ public class LitterService : ILitterService
     {
         int breederId = _breederContext.BreederId;
 
-        int pageNumber = query.PageNumber < 1 ? 1 : query.PageNumber;
-        int pageSize = query.PageSize < 1 ? 10 : Math.Min(query.PageSize, GetLittersQuery.MaxPageSize);
+        if (query.PageNumber < 1)
+        {
+            throw new ValidationException("pageNumber must be greater than or equal to 1.");
+        }
+
+        if (query.PageSize < 1 || query.PageSize > GetLittersQuery.MaxPageSize)
+        {
+            throw new ValidationException($"pageSize must be between 1 and {GetLittersQuery.MaxPageSize}.");
+        }
+        
+        int pageNumber = query.PageNumber;
+        int pageSize = query.PageSize;
         
         var dbQuery = _db.Litters.AsNoTracking().Where(l => l.BreederId == breederId);
 
@@ -78,27 +88,37 @@ public class LitterService : ILitterService
                 $"Litter must be in '{LitterStatus.Approved}' status to be published. Current status: '{litter.Status}'.");
         }
 
-        var benefit = await _db.BreederBenefits.FirstOrDefaultAsync(b => b.BreederId == breederId, cancellationToken)
-            ?? throw new NotFoundException($"No benefit record found for breeder {breederId}.");
-
-        if (benefit.UsedCount >= benefit.FreeLimit)
+        var benefitExists = await _db.BreederBenefits.AnyAsync(b => b.BreederId == breederId, cancellationToken);
+        if (!benefitExists)
         {
-            _db.AuditLogs.Add(new AuditLog
-            {
-                EntityId = litter.Id,
-                BreederId = breederId,
-                Action = "Publish attempt failed - limits exceeded",
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _db.SaveChangesAsync(cancellationToken);
-            throw new DomainException("Free publish limit exceeded for this breeder.");
+            throw new NotFoundException($"No benefit record found for breeder {breederId}.");
         }
 
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            benefit.UsedCount++;
+            var rowsAffected = await _db.BreederBenefits
+                .Where(b => b.BreederId == breederId && b.UsedCount < b.FreeLimit)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(b => b.UsedCount, b => b.UsedCount + 1),
+                    cancellationToken);
+            if (rowsAffected == 0)
+            {
+            
+                _db.AuditLogs.Add(new AuditLog
+                {
+                    EntityId = litter.Id,
+                    BreederId = breederId,
+                    Action = "Publish attempt failed - limits exceeded",
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                await _db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                throw new DomainException("Free publish limit exceeded for this breeder.");
+            }
+
             litter.Status = LitterStatus.Published;
 
             _db.AuditLogs.Add(new AuditLog
@@ -111,6 +131,10 @@ public class LitterService : ILitterService
 
             await _db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DomainException)
+        {
+          throw;
         }
         catch (Exception ex)
         {

@@ -20,7 +20,7 @@ builder.Services.AddSwaggerGen(options =>
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Breeders Test Task API",
-        Version = "v1"
+        Version = "v2"
     });
 
     options.AddSecurityDefinition("BreederId", new OpenApiSecurityScheme
@@ -50,6 +50,20 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddDbContext<BreedersDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=breeders.db"));
 
+const string FrontendCorsPolicy = "FrontendCorsPolicy";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(FrontendCorsPolicy, policy =>
+    {
+        policy
+            .SetIsOriginAllowed(origin =>
+                Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+                (uri.Host == "localhost" || uri.Host == "127.0.0.1"))
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddScoped<ILitterService, LitterService>();
 builder.Services.AddScoped<INotificationService, ConsoleNotificationService>();
 builder.Services.AddScoped<BreederContext>();
@@ -59,6 +73,7 @@ var app = builder.Build();
 
 // Registered first so it can catch exceptions thrown anywhere later in the pipeline.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseCors(FrontendCorsPolicy);
 app.UseMiddleware<BreederAuthMiddleware>();
 
 // Swagger is left enabled in all environments to make manual review of this test task easier.

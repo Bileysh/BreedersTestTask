@@ -14,6 +14,9 @@ public class BreederAuthMiddleware
 
     public async Task InvokeAsync(HttpContext context, BreederContext breederContext)
     {
+        bool isPreflight = HttpMethods.IsOptions(context.Request.Method);
+
+        
         if (context.Request.Path.StartsWithSegments("/api"))
         {
             if (!context.Request.Headers.TryGetValue("X-Breeder-Id", out var headerValue) || 
