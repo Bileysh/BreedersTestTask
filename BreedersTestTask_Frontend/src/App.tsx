@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { ApiError, getLitters, publishLitter } from './api';
+import type { Litter, LitterStatus, PagedResult } from './api';
 import './App.css';
 
-const STAGES = ['Draft', 'Submitted', 'Approved', 'Published'];
-const STATUS_FILTERS = ['All', ...STAGES];
+const STAGES: LitterStatus[] = ['Draft', 'Submitted', 'Approved', 'Published'];
+const STATUS_FILTERS = ['All', ...STAGES] as const;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
-function formatDate(iso) {
+interface Banner {
+  kind: 'error' | 'success';
+  text: string;
+}
+
+function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -14,7 +21,7 @@ function formatDate(iso) {
   });
 }
 
-function LifecycleTrack({ status }) {
+function LifecycleTrack({ status }: { status: LitterStatus }) {
   const currentIndex = STAGES.indexOf(status);
   return (
       <div className="track" role="img" aria-label={`Lifecycle stage: ${status}`}>
@@ -37,7 +44,7 @@ function LifecycleTrack({ status }) {
   );
 }
 
-function StatusPill({ status }) {
+function StatusPill({ status }: { status: LitterStatus }) {
   return <span className={`pill pill-${status.toLowerCase()}`}>{status}</span>;
 }
 
@@ -48,17 +55,17 @@ export default function App() {
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<PagedResult<Litter> | null>(null);
   const [loading, setLoading] = useState(false);
-  const [publishingId, setPublishingId] = useState(null);
-  const [banner, setBanner] = useState(null); 
+  const [publishingId, setPublishingId] = useState<number | null>(null);
+  const [banner, setBanner] = useState<Banner | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setBanner(null);
     try {
       const data = await getLitters(activeBreederId, {
-        status: statusFilter === 'All' ? undefined : statusFilter,
+        status: statusFilter === 'All' ? undefined : (statusFilter as LitterStatus),
         pageNumber,
         pageSize,
       });
@@ -79,7 +86,7 @@ export default function App() {
     load();
   }, [load]);
 
-  function handleBreederSubmit(event) {
+  function handleBreederSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsed = Number(breederIdInput);
     if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -90,17 +97,17 @@ export default function App() {
     setActiveBreederId(parsed);
   }
 
-  function handleStatusChange(value) {
+  function handleStatusChange(value: string) {
     setStatusFilter(value);
     setPageNumber(1);
   }
 
-  function handlePageSizeChange(value) {
+  function handlePageSizeChange(value: string) {
     setPageSize(Number(value));
     setPageNumber(1);
   }
 
-  async function handlePublish(litter) {
+  async function handlePublish(litter: Litter) {
     setPublishingId(litter.id);
     setBanner(null);
     try {
